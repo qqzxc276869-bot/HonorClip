@@ -11,6 +11,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 import cv2
 import json
+import time
 
 CONFIG_FILE = "config.json"
 HISTORY_FILE = "history.json"
@@ -100,6 +101,7 @@ class KillClipperApp:
         self.after      = ctk.DoubleVar(value=1.0)
         self.sample     = ctk.IntVar(value=5)
         self.cooldown   = ctk.DoubleVar(value=2.0)
+        self.export_mode = ctk.StringVar(value="极速无损 (开头可能卡顿)")
         
         self.roi_x      = ctk.IntVar(value=1700)
         self.roi_y      = ctk.IntVar(value=18)
@@ -122,6 +124,7 @@ class KillClipperApp:
                 if "after" in cfg: self.after.set(cfg["after"])
                 if "sample" in cfg: self.sample.set(cfg["sample"])
                 if "cooldown" in cfg: self.cooldown.set(cfg["cooldown"])
+                if "export_mode" in cfg: self.export_mode.set(cfg["export_mode"])
                 if "roi_x" in cfg: self.roi_x.set(cfg["roi_x"])
                 if "roi_y" in cfg: self.roi_y.set(cfg["roi_y"])
                 if "roi_w" in cfg: self.roi_w.set(cfg["roi_w"])
@@ -137,6 +140,7 @@ class KillClipperApp:
             "after": self.after.get(),
             "sample": self.sample.get(),
             "cooldown": self.cooldown.get(),
+            "export_mode": self.export_mode.get(),
             "roi_x": self.roi_x.get(),
             "roi_y": self.roi_y.get(),
             "roi_w": self.roi_w.get(),
@@ -226,12 +230,24 @@ class KillClipperApp:
         # ROI 区域
         self._build_roi(right_col)
 
+        # 底部开关与辅助按钮排布
+        tools_row = ctk.CTkFrame(right_col, fg_color="transparent")
+        tools_row.pack(fill="x", pady=(20, 10), padx=5)
+        
         # 调试勾选框
         ctk.CTkSwitch(
-            right_col, text="开启调试模式（AI 视觉预览区）",
+            tools_row, text="开启调试模式",
             variable=self.debug_mode, font=FONT_SM,
             progress_color=ACCENT
-        ).pack(anchor="w", pady=(20, 10), padx=5)
+        ).pack(side="left")
+
+        # 查看日志按钮
+        ctk.CTkButton(
+            tools_row, text="📄 查看历史日志", font=FONT_SM,
+            width=100, height=28, fg_color=("gray75", "gray25"),
+            hover_color=("gray60", "gray35"), text_color=("black", "white"),
+            command=self._open_log_file
+        ).pack(side="right")
 
         # 运行按钮放在右下角
         self.btn_run = ctk.CTkButton(
@@ -292,8 +308,18 @@ class KillClipperApp:
             ctk.CTkLabel(card, text=lbl, font=FONT_SM).grid(row=i, column=0, padx=15, pady=8, sticky="w")
             NumInput(card, var, f, t, inc).grid(row=i, column=1, padx=15, pady=8, sticky="w")
             
+        # 导出模式选择
+        i = len(opts) + 1
+        ctk.CTkLabel(card, text="视频剪辑模式", font=FONT_SM).grid(row=i, column=0, padx=15, pady=8, sticky="w")
+        mode_menu = ctk.CTkOptionMenu(
+            card, variable=self.export_mode,
+            values=["极速无损 (开头可能卡顿)", "硬件精确剪辑 (NVENC)", "软件精确剪辑 (x264)"],
+            width=200
+        )
+        mode_menu.grid(row=i, column=1, padx=15, pady=8, sticky="w")
+
         # 占位底部 padding
-        ctk.CTkFrame(card, height=10, fg_color="transparent").grid(row=len(opts)+1, column=0)
+        ctk.CTkFrame(card, height=10, fg_color="transparent").grid(row=i+1, column=0)
 
     def _build_roi(self, parent):
         roi_container = ctk.CTkFrame(parent, fg_color="transparent")
@@ -353,6 +379,21 @@ class KillClipperApp:
         )
         if paths:
             self._set_videos(paths)
+
+    def _open_log_file(self):
+        import os
+        log_path = Path("clipper_history.log")
+        if not log_path.exists():
+            with open(log_path, "w", encoding="utf-8") as f:
+                f.write("=== 王者剪辑 历史运行日志 ===\n\n")
+        try:
+            if os.name == 'nt':
+                os.startfile(str(log_path.resolve()))
+            else:
+                import subprocess
+                subprocess.run(['xdg-open' if os.name == 'posix' else 'open', str(log_path.resolve())])
+        except Exception as e:
+            messagebox.showerror("错误", f"无法打开日志: {e}")
 
     def _browse_output(self):
         d = filedialog.askdirectory(title="选择输出目录")
@@ -454,6 +495,7 @@ class KillClipperApp:
         total_clips = 0
         skipped_videos = []
         
+        batch_start_time = time.time()
         self._log(f"{'='*55}\n🚀 批量识别任务启动 ({total} 枚视频列入队列)\n{'='*55}\n\n")
 
         for idx, vp in enumerate(self.video_paths, 1):
@@ -461,6 +503,7 @@ class KillClipperApp:
             
             v_name = Path(vp).name
             self._log(f"▶ 正在处理 [{idx}/{total}]: {v_name}\n")
+            vid_start_time = time.time()
             
             try:
                 self._log("  📡 [1/2] OCR 深度特征扫描中...\n")
@@ -485,17 +528,25 @@ class KillClipperApp:
                     break
 
                 if not timestamps:
-                    self._log("  ⚠ 该视频风平浪静，没有侦测到任何人头，已跳过。\n\n")
+                    vid_elapsed = time.time() - vid_start_time
+                    self._log(f"  ⚠ 该视频风平浪静，没有侦测到任何人头，已跳过。(耗时: {vid_elapsed:.1f} 秒)\n\n")
                     skipped_videos.append(vp)
                     continue
 
-                self._log("  ✂️ [2/2] 正在调用 FFmpeg 引擎无损裁剪渲染...\n")
+                self._log("  ✂️ [2/2] 正在调用 FFmpeg 引擎裁剪渲染...\n")
+                # 转换导出模式
+                em_text = self.export_mode.get()
+                em = "copy"
+                if "NVENC" in em_text: em = "nvenc"
+                elif "x264" in em_text: em = "x264"
+                
                 out_files = export_clips(
                     video_path=vp,
                     kill_timestamps=timestamps,
                     output_dir=odir,
                     before=self.before.get(),
                     after=self.after.get(),
+                    export_mode=em
                 )
 
                 if out_files:
@@ -503,12 +554,16 @@ class KillClipperApp:
                     self._log(f"  🎬 渲染完成！这段视频产出了 {len(out_files)} 个独立操作时刻：\n")
                     for out_file in out_files:
                         self._log(f"     ✅ {Path(out_file).name}\n")
-                    self._log("\n")
+                    
+                    vid_elapsed = time.time() - vid_start_time
+                    self._log(f"  ⏱️ 本视频分析与剪辑共耗时: {vid_elapsed:.1f} 秒\n\n")
                 else:
-                    self._log("  ❌ 丢进剪辑器失败了，是不是没装 FFmpeg？\n\n")
+                    vid_elapsed = time.time() - vid_start_time
+                    self._log(f"  ❌ 丢进剪辑器失败了，是不是没装 FFmpeg？(耗时: {vid_elapsed:.1f} 秒)\n\n")
 
             except Exception as e:
-                self._log(f"  ❌ 代码崩了：{e}\n\n")
+                vid_elapsed = time.time() - vid_start_time
+                self._log(f"  ❌ 代码崩了：{e} (耗时: {vid_elapsed:.1f} 秒)\n\n")
 
         if skipped_videos and not self.stop_event.is_set():
             self._log(f"\n{'='*55}\n🚀 开启第二轮复检：对 {len(skipped_videos)} 个未检测到击杀的视频进行细致复查\n{'='*55}\n\n")
@@ -518,6 +573,7 @@ class KillClipperApp:
                 if self.stop_event.is_set(): break
                 v_name = Path(vp).name
                 self._log(f"▶ [复检] 正在处理 [{idx}/{len(skipped_videos)}]: {v_name} (采样率提升至 {enhanced_sample_rate})\n")
+                vid_start_time = time.time()
                 
                 try:
                     self._log("  📡 [1/2] OCR 深度特征扫描中...\n")
@@ -530,30 +586,40 @@ class KillClipperApp:
                         stop_event=self.stop_event
                     )
                     if not timestamps:
-                        self._log("  ⚠ 复检依然没有侦测到任何人头，确认跳过。\n\n")
+                        vid_elapsed = time.time() - vid_start_time
+                        self._log(f"  ⚠ 复检依然没有侦测到任何人头，确认跳过。(复检耗时: {vid_elapsed:.1f} 秒)\n\n")
                         continue
                         
-                    self._log("  ✂️ [2/2] 正在调用 FFmpeg 引擎无损裁剪渲染...\n")
+                    self._log("  ✂️ [2/2] 正在调用 FFmpeg 引擎裁剪渲染...\n")
                     out_files = export_clips(
                         video_path=vp, kill_timestamps=timestamps, output_dir=odir,
-                        before=self.before.get(), after=self.after.get()
+                        before=self.before.get(), after=self.after.get(), export_mode=em
                     )
                     if out_files:
                         total_clips += len(out_files)
                         self._log(f"  🎬 渲染完成！这段视频产出了 {len(out_files)} 个独立操作时刻：\n")
                         for out_file in out_files:
                             self._log(f"     ✅ {Path(out_file).name}\n")
-                        self._log("\n")
+                        
+                        vid_elapsed = time.time() - vid_start_time
+                        self._log(f"  ⏱️ 本视频复检与剪辑共耗时: {vid_elapsed:.1f} 秒\n\n")
                     else:
-                        self._log("  ❌ 复检导出失败。\n\n")
+                        vid_elapsed = time.time() - vid_start_time
+                        self._log(f"  ❌ 复检导出失败。(耗时: {vid_elapsed:.1f} 秒)\n\n")
                 except Exception as e:
-                    self._log(f"  ❌ 复检代码崩了：{e}\n\n")
+                    vid_elapsed = time.time() - vid_start_time
+                    self._log(f"  ❌ 复检代码崩了：{e} (耗时: {vid_elapsed:.1f} 秒)\n\n")
 
         self._save_history([Path(p).name for p in self.video_paths])
+
+        batch_elapsed = time.time() - batch_start_time
+        batch_mins = int(batch_elapsed // 60)
+        batch_secs = batch_elapsed % 60
 
         self._log("=" * 55 + "\n")
         self._log(f"🎉 全部收工！你的私人剪辑师已退下。\n")
         self._log(f"📦 成果汇报: 共搜刮出 {total_clips} 个高能片段。\n")
+        self._log(f"⏱️ 总计耗时: {batch_mins}分 {batch_secs:.1f}秒\n")
         self._log(f"📂 存放位置: {Path(odir).resolve()}\n")
 
         def _reset_btns():
@@ -570,6 +636,19 @@ class KillClipperApp:
             self.log_text.see("end")
             self.log_text.configure(state="disabled")
         self.root.after(0, _append)
+        
+        # 写入物理日志文件 (追加模式)
+        def _write_file():
+            try:
+                with open("clipper_history.log", "a", encoding="utf-8") as f:
+                    if "🚀 批量识别任务启动" in text:
+                        import datetime
+                        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        f.write(f"\n\n{'='*55}\n【系统时间】 {now}\n{'='*55}\n")
+                    f.write(text)
+            except Exception:
+                pass
+        threading.Thread(target=_write_file, daemon=True).start()
 
 
 def main():

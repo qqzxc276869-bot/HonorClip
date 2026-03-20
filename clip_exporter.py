@@ -65,9 +65,10 @@ def _run_ffmpeg(
     start: float,
     end: float,
     output_path: str,
+    mode: str = "copy",
 ) -> bool:
     """
-    调用 FFmpeg 进行无损切割（stream copy）。
+    调用 FFmpeg 进行无损切割或精确重编。
     返回 True 表示成功。
     """
     duration = end - start
@@ -76,10 +77,16 @@ def _run_ffmpeg(
         "-ss", f"{start:.3f}",
         "-i", input_path,
         "-t", f"{duration:.3f}",
-        "-c", "copy",           # 无损复制，速度极快
-        "-avoid_negative_ts", "1",
-        output_path
     ]
+    
+    if mode == "nvenc":
+        cmd.extend(["-c:v", "h264_nvenc", "-preset", "p4", "-b:v", "15M", "-c:a", "copy"])
+    elif mode == "x264":
+        cmd.extend(["-c:v", "libx264", "-crf", "23", "-preset", "veryfast", "-c:a", "copy"])
+    else:
+        cmd.extend(["-c", "copy", "-avoid_negative_ts", "1"])
+        
+    cmd.append(output_path)
     kwargs = {}
     if os.name == 'nt':
         kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
@@ -117,6 +124,7 @@ def export_clips(
     output_dir: str = "./output",
     before: float = 10.0,
     after: float = 1.0,
+    export_mode: str = "copy"
 ) -> list[str]:
     """
     根据击杀时间戳生成视频片段。
@@ -196,7 +204,7 @@ def export_clips(
             f"(时长 {end-start:.1f}s)  击杀点: {kills_str}"
         )
 
-        success = _run_ffmpeg(video_path, start, end, out_path)
+        success = _run_ffmpeg(video_path, start, end, out_path, export_mode)
         if success:
             size_mb = os.path.getsize(out_path) / 1024 / 1024
             print(f"    ✅ 已保存：{filename}  ({size_mb:.1f} MB)")

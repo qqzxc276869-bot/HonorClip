@@ -1,12 +1,13 @@
 {
-  "output_dir": "E:\\素材\\片段",
+  "output_dir": "E:/素材/测试",
   "before": 10.0,
-  "after": 1.0,
-  "sample": 2,
+  "after": 2.0,
+  "sample": 3,
   "cooldown": 2.0,
-  "roi_x": 1552,
-  "roi_y": 129,
-  "roi_w": 33,
+  "export_mode": "硬件精确剪辑 (NVENC)",
+  "roi_x": 1521,
+  "roi_y": 126,
+  "roi_w": 34,
   "roi_h": 37,
   "debug_mode": false
 }

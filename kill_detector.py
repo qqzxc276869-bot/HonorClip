@@ -131,7 +131,7 @@ def detect_kills(
     _log(f"[检测] ROI={roi}  采样间隔={frame_interval}帧  冷却={cooldown}s")
     _log("-" * 60)
 
-    # 初始化 EasyOCR（使用 GPU，大幅提升速度）
+    # 恢复加载 ch_sim 中文模型。纯 en 模型过于自信，容易把游戏背景贴图脑补成数字导致虚假击杀！
     ocr = easyocr.Reader(['ch_sim', 'en'], gpu=True, verbose=False)
 
     x, y, w, h = roi
@@ -145,20 +145,33 @@ def detect_kills(
     sampled = 0
     frame_idx = 0
 
+    current_pos = 0
+    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+
     while frame_idx < total_frames:
         # 🟢 检查外部停止信号
         if stop_event and stop_event.is_set():
             _log("🛑 检测任务被用户强行终止。")
             break
 
-        # ── 直接 seek 到目标帧，跳过中间所有帧的解码 ──────────────
-        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-        ret, frame = cap.read()
+        # ── 连续 grab 跳帧，比反复使用 set(POS_FRAMES) 快几十倍 ──────────────
+        while current_pos <= frame_idx:
+            ret = cap.grab()
+            if not ret:
+                break
+            current_pos += 1
+            
+        if not ret:
+            break
+            
+        ret, frame = cap.retrieve()
         if not ret:
             break
 
         sampled += 1
-        timestamp = frame_idx / fps
+        # 获取底层容器的最准确时间戳，彻底防止手机录屏的 VFR（可变帧率）导致时间轴偏移
+        msec = cap.get(cv2.CAP_PROP_POS_MSEC)
+        timestamp = (msec / 1000.0) if msec > 0 else (frame_idx / fps)
 
         # 裁剪 ROI（防止越界）
         fh, fw = frame.shape[:2]
@@ -181,6 +194,7 @@ def detect_kills(
 
             prev_roi_gray = roi_gray
 
+            # 回退到严谨的帧差监测逻辑，仅在画面发生变化及之后的数帧内进行 OCR，杜绝静态背景被误判
             run_ocr = (frames_since_change <= 5)
             frames_since_change += 1
 
