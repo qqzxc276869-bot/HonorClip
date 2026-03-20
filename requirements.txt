@@ -1,0 +1,13 @@
+# 王者荣耀击杀片段自动剪辑 - Python 依赖
+
+# 视频处理
+opencv-python>=4.8.0
+
+# OCR 引擎（EasyOCR，稳定易用，无需额外依赖）
+easyocr>=1.7.0
+
+# 工具库（numpy 会被 opencv/easyocr 自动安装）
+numpy>=1.24.0
+
+# GUI 拖拽支持
+tkinterdnd2
