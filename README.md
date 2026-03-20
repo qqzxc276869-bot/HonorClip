@@ -19,9 +19,7 @@
 ---
 
 ## 📸 界面预览
-
-> [!TIP]
-> <img width="482" height="602" alt="b638a4021648542d7c1efb31b3ceb4a3" src="https://github.com/user-attachments/assets/06506aba-2933-4e33-a56d-1d117b9fcbc6" />
+<img width="964" height="1204" alt="a779fde86de37f38b45cacc89ecbb9b0" src="https://github.com/user-attachments/assets/7ae5f3e9-e117-4f3d-96d8-8fce1fb57dc7" />
 
 
 ## 🛠️ 环境准备
