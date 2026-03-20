@@ -21,10 +21,8 @@
 ## 📸 界面预览
 
 > [!TIP]
-> (完成后请在此处上传你的软件截图，展示那酷炫的极简黑白界面)
-> <img width="482" height="602" alt="b638a4021648542d7c1efb31b3ceb4a3" src="https://github.com/user-attachments/assets/e753b4a9-d853-4595-a706-42238cd97eef" />
+> <img width="482" height="602" alt="b638a4021648542d7c1efb31b3ceb4a3" src="https://github.com/user-attachments/assets/06506aba-2933-4e33-a56d-1d117b9fcbc6" />
 
----
 
 ## 🛠️ 环境准备
 
