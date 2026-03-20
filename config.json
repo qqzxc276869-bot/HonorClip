@@ -1,0 +1,12 @@
+{
+  "output_dir": "E:\\素材\\片段",
+  "before": 10.0,
+  "after": 1.0,
+  "sample": 2,
+  "cooldown": 2.0,
+  "roi_x": 1552,
+  "roi_y": 129,
+  "roi_w": 33,
+  "roi_h": 37,
+  "debug_mode": false
+}

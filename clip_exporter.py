@@ -80,12 +80,17 @@ def _run_ffmpeg(
         "-avoid_negative_ts", "1",
         output_path
     ]
+    kwargs = {}
+    if os.name == 'nt':
+        kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+
     try:
         result = subprocess.run(
             cmd,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
-            timeout=300
+            timeout=300,
+            **kwargs
         )
         if result.returncode != 0:
             err = result.stderr.decode("utf-8", errors="replace")[-500:]
@@ -139,6 +144,10 @@ def export_clips(
         return []
 
     # 获取视频总时长
+    kwargs = {}
+    if os.name == 'nt':
+        kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+
     probe_cmd = [
         "ffprobe", "-v", "quiet",
         "-print_format", "json",
@@ -147,7 +156,7 @@ def export_clips(
     try:
         import json
         probe_result = subprocess.run(
-            probe_cmd, capture_output=True, timeout=30
+            probe_cmd, capture_output=True, timeout=30, **kwargs
         )
         info = json.loads(probe_result.stdout)
         video_duration = float(info["format"]["duration"])

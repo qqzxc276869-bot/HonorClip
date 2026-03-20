@@ -86,6 +86,9 @@ def detect_kills(
     cooldown: float = 2.0,
     debug: bool = False,
     output_dir: str = "",
+    log_callback: callable = None,
+    progress_callback: callable = None,
+    stop_event = None,
 ) -> list[float]:
     """
     从视频中检测击杀事件，返回每次击杀发生的时间戳列表（单位：秒）。
@@ -117,10 +120,16 @@ def detect_kills(
     duration = total_frames / fps
     frame_interval = max(1, int(fps / sample_rate))
 
-    print(f"[检测] 视频：{video_path}")
-    print(f"[检测] FPS={fps:.1f}  总帧数={total_frames}  时长={duration:.1f}s")
-    print(f"[检测] ROI={roi}  采样间隔={frame_interval}帧  冷却={cooldown}s")
-    print("-" * 60)
+    def _log(msg: str):
+        if log_callback:
+            log_callback(msg + "\n")
+        else:
+            print(msg)
+
+    _log(f"[检测] 视频：{video_path}")
+    _log(f"[检测] FPS={fps:.1f}  总帧数={total_frames}  时长={duration:.1f}s")
+    _log(f"[检测] ROI={roi}  采样间隔={frame_interval}帧  冷却={cooldown}s")
+    _log("-" * 60)
 
     # 初始化 EasyOCR（使用 GPU，大幅提升速度）
     ocr = easyocr.Reader(['ch_sim', 'en'], gpu=True, verbose=False)
@@ -137,6 +146,11 @@ def detect_kills(
     frame_idx = 0
 
     while frame_idx < total_frames:
+        # 🟢 检查外部停止信号
+        if stop_event and stop_event.is_set():
+            _log("🛑 检测任务被用户强行终止。")
+            break
+
         # ── 直接 seek 到目标帧，跳过中间所有帧的解码 ──────────────
         cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
         ret, frame = cap.read()
@@ -203,7 +217,7 @@ def detect_kills(
                         if timestamp - last_kill_ts >= cooldown:
                             kill_timestamps.append(timestamp)
                             last_kill_ts = timestamp
-                            print(
+                            _log(
                                 f"  ✅ 击杀！时间={timestamp:.2f}s  "
                                 f"KD: {last_kill_num} → {stable_num}  "
                                 f"(+{kill_amount})"
@@ -246,9 +260,12 @@ def detect_kills(
                     break
 
         # 进度显示
-        if sampled % 200 == 0:
-            progress = frame_idx / total_frames * 100
-            print(f"  ⏳ 进度 {progress:.1f}%  采样={sampled}  OCR={ocr_calls}次", end='\r')
+        if sampled % 50 == 0:  # 稍微提高汇报频率以让进度条更丝滑
+            progress = frame_idx / total_frames
+            if progress_callback:
+                progress_callback(progress)
+            else:
+                print(f"  ⏳ 进度 {progress*100:.1f}%  采样={sampled}  OCR={ocr_calls}次", end='\r')
 
         frame_idx += frame_interval   # 直接跳到下一个采样点
 
@@ -256,6 +273,6 @@ def detect_kills(
     if debug:
         cv2.destroyAllWindows()
 
-    print(f"\n[检测] 完成！共采样 {sampled} 帧，实际 OCR {ocr_calls} 次")
-    print(f"[检测] 共发现 {len(kill_timestamps)} 次击杀")
+    _log(f"\n[检测] 完成！共采样 {sampled} 帧，实际 OCR {ocr_calls} 次")
+    _log(f"[检测] 共发现 {len(kill_timestamps)} 次击杀")
     return kill_timestamps
