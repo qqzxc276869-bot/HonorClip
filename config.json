@@ -1,13 +1,13 @@
 {
-  "output_dir": "E:/素材/测试",
-  "before": 10.0,
+  "output_dir": "E:/素材/徐凤年玄策片段",
+  "before": 11.0,
   "after": 2.0,
   "sample": 3,
   "cooldown": 2.0,
-  "export_mode": "硬件精确剪辑 (NVENC)",
-  "roi_x": 1521,
+  "export_mode": "极速无损 (开头可能卡顿)",
+  "roi_x": 1525,
   "roi_y": 126,
-  "roi_w": 34,
-  "roi_h": 37,
+  "roi_w": 21,
+  "roi_h": 39,
   "debug_mode": false
 }

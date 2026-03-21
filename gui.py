@@ -205,16 +205,30 @@ class KillClipperApp:
         # 拖拽区
         self._build_drop_zone(left_col)
         
-        # 进度条与终止按钮
-        ctrl_row = ctk.CTkFrame(left_col, fg_color="transparent")
-        ctrl_row.pack(fill="x", pady=(10, 15))
-        
-        self.progress_bar = ctk.CTkProgressBar(ctrl_row, progress_color=ACCENT, height=12)
-        self.progress_bar.pack(side="left", fill="x", expand=True, padx=(0, 15))
+        # 进度与控制区
+        ctrl_frame = ctk.CTkFrame(left_col, fg_color="transparent")
+        ctrl_frame.pack(fill="x", pady=(10, 15))
+
+        # 批量总进度行
+        batch_row = ctk.CTkFrame(ctrl_frame, fg_color="transparent")
+        batch_row.pack(fill="x", pady=(0, 8))
+        self.lbl_batch = ctk.CTkLabel(batch_row, text="总进度: -/-", font=FONT_SM, text_color="gray", width=70, anchor="w")
+        self.lbl_batch.pack(side="left")
+        self.batch_progress = ctk.CTkProgressBar(batch_row, progress_color="#4CAF50", height=8)
+        self.batch_progress.pack(side="left", fill="x", expand=True, padx=(5, 0))
+        self.batch_progress.set(0)
+
+        # 当前文件进度行
+        cur_row = ctk.CTkFrame(ctrl_frame, fg_color="transparent")
+        cur_row.pack(fill="x")
+        self.lbl_cur = ctk.CTkLabel(cur_row, text="当前文件:", font=FONT_SM, text_color="gray", width=70, anchor="w")
+        self.lbl_cur.pack(side="left")
+        self.progress_bar = ctk.CTkProgressBar(cur_row, progress_color=ACCENT, height=8)
+        self.progress_bar.pack(side="left", fill="x", expand=True, padx=(5, 15))
         self.progress_bar.set(0)
 
         self.btn_stop = ctk.CTkButton(
-            ctrl_row, text="终止", width=80, height=32,
+            cur_row, text="终止", width=80, height=26,
             fg_color=("gray85", "gray25"), hover_color="#e94560",
             state="disabled", command=self._on_stop
         )
@@ -275,13 +289,9 @@ class KillClipperApp:
         if HAS_DND:
             self.drop_label.drop_target_register(DND_FILES)
             self.drop_label.dnd_bind("<<Drop>>", self._on_drop)
-        else:
-            self.drop_label.configure(text="🎬 点击本区域选择视频文件\n（未安装 tkinterdnd2，暂不支持拖拽）")
-
-        self.file_label = ctk.CTkLabel(
-            zone, text="(未选择文件)", font=FONT_SM, text_color=GREEN, wraplength=550
-        )
-        self.file_label.pack(pady=(0, 10))
+        self.video_list_frame = ctk.CTkScrollableFrame(zone, fg_color="transparent", height=120)
+        self.video_list_frame.pack(fill="x", pady=(0, 10), padx=20)
+        self._refresh_video_list()
 
     def _build_params(self, parent):
         card = ctk.CTkFrame(parent, fg_color=("gray85", "gray13"), corner_radius=10)
@@ -405,14 +415,55 @@ class KillClipperApp:
         if paths:
             self._set_videos(paths)
 
+    def _remove_video(self, path):
+        if path in self.video_paths:
+            self.video_paths.remove(path)
+            self._log(f"已取消文件: {Path(path).name}\n")
+            self._refresh_video_list()
+
     def _set_videos(self, paths):
-        self.video_paths = list(paths)
-        names = [Path(p).name for p in self.video_paths]
-        lbl = f"✅ 已准备提取 {len(names)} 个视频源" if len(names) > 1 else f"✅ {names[0]}"
+        added = 0
+        for p in paths:
+            if p not in self.video_paths:
+                self.video_paths.append(p)
+                added += 1
+        if added > 0:
+            self._log(f"新增了 {added} 个视频片段，剪辑序列共计 {len(self.video_paths)} 个文件。\n")
+        self._refresh_video_list()
+
+    def _refresh_video_list(self):
+        for child in self.video_list_frame.winfo_children():
+            child.destroy()
+            
+        if not self.video_paths:
+            lbl = ctk.CTkLabel(self.video_list_frame, text="(未选择文件)", font=FONT_SM, text_color=GREEN)
+            lbl.pack(pady=10)
+            if HAS_DND:
+                self.drop_label.configure(text="🎬 将包含击杀镜头的视频文件拖到此处\n也可以点击本区域多选文件", text_color="gray", font=("Segoe UI", 14))
+            else:
+                self.drop_label.configure(text="🎬 点击本区域选择视频文件\n（未安装 tkinterdnd2，暂不支持拖拽）", text_color="gray", font=("Segoe UI", 14))
+            return
+            
+        header = ctk.CTkFrame(self.video_list_frame, fg_color="transparent")
+        header.pack(fill="x", pady=(0, 5))
+        ctk.CTkLabel(header, text=f"待处理列表 ({len(self.video_paths)}):", font=FONT_SM, text_color=GREEN).pack(side="left")
+        ctk.CTkButton(header, text="✖ 清空全部", width=60, height=24, font=FONT_SM, fg_color=("gray75", "gray30"), hover_color="#e94560", command=self._clear_videos).pack(side="right")
         
+        for vp in self.video_paths:
+            row = ctk.CTkFrame(self.video_list_frame, fg_color=("gray85", "gray20"), corner_radius=6, height=32)
+            row.pack(fill="x", pady=2)
+            row.pack_propagate(False)
+            name = Path(vp).name
+            ctk.CTkLabel(row, text=name, font=FONT_SM, text_color=("black", "white")).pack(side="left", padx=10, fill="x", expand=True, anchor="w")
+            ctk.CTkButton(row, text="❎", width=28, height=28, fg_color="transparent", hover_color="#e94560", command=lambda p=vp: self._remove_video(p)).pack(side="right", padx=2)
+            
+        lbl = f"✅ 已准备提取 {len(self.video_paths)} 个视频源" if len(self.video_paths) > 1 else f"✅ {Path(self.video_paths[0]).name}"
         self.drop_label.configure(text=lbl, text_color=GREEN, font=("Segoe UI", 16, "bold"))
-        self.file_label.configure(text="; ".join(names))
-        self._log(f"已加载 {len(self.video_paths)} 个视频片段，等待处理...\n")
+
+    def _clear_videos(self):
+        self.video_paths.clear()
+        self._log("已清空视频列表。\n")
+        self._refresh_video_list()
 
     def _calibrate_roi(self):
         if not self.video_paths:
@@ -473,6 +524,9 @@ class KillClipperApp:
         self.btn_run.configure(state="disabled", text="⏳  正在疯狂演算中…")
         self.btn_stop.configure(state="normal")
         self.progress_bar.set(0)
+        self.batch_progress.set(0)
+        self.lbl_batch.configure(text=f"总进度: 0/{len(self.video_paths)}", text_color=ACCENT)
+        self.lbl_cur.configure(text_color=ACCENT)
         
         self.log_text.configure(state="normal")
         self.log_text.delete("1.0", "end")
@@ -509,7 +563,10 @@ class KillClipperApp:
                 self._log("  📡 [1/2] OCR 深度特征扫描中...\n")
                 
                 def _update_progress(p):
-                    self.root.after(0, lambda: self.progress_bar.set(p))
+                    def _sync():
+                        self.progress_bar.set(p)
+                        self.batch_progress.set((idx - 1 + p) / total)
+                    self.root.after(0, _sync)
 
                 timestamps = detect_kills(
                     video_path=vp,
@@ -575,6 +632,7 @@ class KillClipperApp:
                 self._log(f"▶ [复检] 正在处理 [{idx}/{len(skipped_videos)}]: {v_name} (采样率提升至 {enhanced_sample_rate})\n")
                 vid_start_time = time.time()
                 
+                self.root.after(0, lambda i=idx, t=len(skipped_videos): self.lbl_batch.configure(text=f"正在复检: {i}/{t}"))
                 try:
                     self._log("  📡 [1/2] OCR 深度特征扫描中...\n")
                     def _update_progress2(p):
@@ -626,6 +684,8 @@ class KillClipperApp:
             self.btn_run.configure(state="normal", text="▶ 开始批量剪辑")
             self.btn_stop.configure(state="disabled", text="终止")
             self.progress_bar.set(0 if not self.stop_event.is_set() else self.progress_bar.get())
+            self.lbl_batch.configure(text="处理完成" if not self.stop_event.is_set() else "已终止", text_color="gray")
+            self.lbl_cur.configure(text_color="gray")
             
         self.root.after(0, _reset_btns)
 

@@ -80,11 +80,13 @@ def _run_ffmpeg(
     ]
     
     if mode == "nvenc":
-        cmd.extend(["-c:v", "h264_nvenc", "-preset", "p4", "-b:v", "15M", "-c:a", "copy"])
+        # 用户需求：彻底不要音频 (-an)。
+        # 不仅导出速度逼近极限，导出的文件更小，且从根本上杜绝了任何音视频同步导致的卡顿！
+        cmd.extend(["-c:v", "h264_nvenc", "-preset", "p4", "-b:v", "15M", "-an"])
     elif mode == "x264":
-        cmd.extend(["-c:v", "libx264", "-crf", "23", "-preset", "veryfast", "-c:a", "copy"])
+        cmd.extend(["-c:v", "libx264", "-crf", "23", "-preset", "veryfast", "-an"])
     else:
-        cmd.extend(["-c", "copy", "-avoid_negative_ts", "1"])
+        cmd.extend(["-c", "copy", "-an", "-avoid_negative_ts", "1"])
         
     cmd.append(output_path)
     kwargs = {}

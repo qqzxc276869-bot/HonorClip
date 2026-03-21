@@ -209,13 +209,13 @@ def detect_kills(
                 # 记录识别历史以消除单帧抖动
                 if current_num is not None:
                     num_history.append(current_num)
-                    if len(num_history) > 3:
+                    if len(num_history) > 4:
                         num_history.pop(0)
 
             # ---------- 判定稳定数字 ----------
-            # 当最近两次识别到的数字完全一样时，我们才认为它是一个“稳定”的真实数字
+            # 当最近连续 3 次识别到的数字完全一样时，才认为它是一个“稳定”的真实数字
             stable_num = None
-            if len(num_history) >= 2 and num_history[-1] == num_history[-2]:
+            if len(num_history) >= 3 and num_history[-1] == num_history[-2] == num_history[-3]:
                 stable_num = num_history[-1]
 
             # ---------- 击杀判断 ----------
@@ -226,8 +226,8 @@ def detect_kills(
                 elif stable_num > last_kill_num:
                     kill_amount = stable_num - last_kill_num
                     
-                    # 防抖过滤：一次击杀最多涨 5 个。如果是跳剪导致的突增，不在此处记录高光。
-                    if kill_amount <= 5:
+                    # 同一个视频没有跳剪，瞬间飙升超过 3 个肯定是之前的基准因为幻觉降低了，现在正在反弹。
+                    if kill_amount <= 3:
                         if timestamp - last_kill_ts >= cooldown:
                             kill_timestamps.append(timestamp)
                             last_kill_ts = timestamp
@@ -246,13 +246,21 @@ def detect_kills(
                                 cv2.rectangle(dbg_frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
                                 cv2.imwrite(str(dbg_dir / f"{base_name}_frame.jpg"), dbg_frame)
                                 cv2.imwrite(str(dbg_dir / f"{base_name}_roi.jpg"), roi_img)
+                    else:
+                        _log(f"  ⚠️ KD 瞬移 ({last_kill_num} → {stable_num})，超大跨度(+{kill_amount})，只同步基准。")
 
                     # 只要稳定数字增加了，都更新基准
                     last_kill_num = stable_num
+                    num_history.clear()
 
                 elif stable_num < last_kill_num:
-                    # 稳定数字发生了【极小化下降】，只可能是新开了一局游戏，或者是之前的基准被连错毒化。信任并重置！
-                    last_kill_num = stable_num
+                    # 既然同一视频没有跳剪，KD 真实的下降只可能是新对局开始，归零。
+                    if stable_num <= 1:
+                        _log(f"  🔄 检测到新局开始 ({last_kill_num} → {stable_num})，重置基准。")
+                        last_kill_num = stable_num
+                        num_history.clear()
+                    # 对于 > 1 的局部下降（如 7 突然变成 3），100%是团战爆炸特效污染了画面。
+                    # **坚决维持原高基准不变**，直接无视这次错觉！
 
             # ---------- 调试窗口 ----------
             if debug:
