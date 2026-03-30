@@ -566,6 +566,7 @@ class KillClipperApp:
                     def _sync():
                         self.progress_bar.set(p)
                         self.batch_progress.set((idx - 1 + p) / total)
+                        self.lbl_batch.configure(text=f"总进度: {idx}/{total}")
                     self.root.after(0, _sync)
 
                 timestamps = detect_kills(
