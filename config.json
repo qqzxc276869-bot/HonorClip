@@ -5,9 +5,9 @@
   "sample": 3,
   "cooldown": 2.0,
   "export_mode": "极速无损 (开头可能卡顿)",
-  "roi_x": 1555,
-  "roi_y": 129,
-  "roi_w": 28,
-  "roi_h": 31,
+  "roi_x": 1528,
+  "roi_y": 124,
+  "roi_w": 52,
+  "roi_h": 37,
   "debug_mode": false
 }
